@@ -1,0 +1,159 @@
+---
+title: "CUNY DATA 612 Project 1 | Global Baseline Predictors and RMSE"
+author: "Peter Kowalchuk"
+date: "2/2/2020"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(kableExtra)
+```
+
+
+#Introduction
+
+In this project we will build a baseline recommender using a dataset with movie ratings. Users, raters in our dataset, as well as items, or movies, will both be normalized to account for "bias". Once the recommender is built, the performance of the same will be asses using the RMSE metric. 
+
+#Data
+
+The data used in the project consist of ratings of 10 popular movies by 7 individuals. Data was collected by interviewing family and friends.
+
+```{r}
+data <- as.matrix(read.csv("data.csv", header = TRUE,row.names = 1))
+kable(data)
+```
+
+#Splitting the data
+
+A test dataset was selected from the data
+
+```{r}
+testData<-data[NA,NA]
+rownames(testData)<-rownames(data)
+colnames(testData)<-colnames(data)
+i<-0
+while(i<(0.3*sum(!is.na(data)))) {
+  row<-sample(1:nrow(data),1)
+  col<-sample(1:ncol(data),1)
+  if(!is.na(data[row,col])) {
+    i<-i+1
+    testData[row,col]<-data[row,col]
+  }
+}
+kable(testData)
+```
+
+    
+The training dataset is derived from extracting the test set from the original data
+
+```{r}
+testDataTemp<-testData
+testDataTemp[!is.na(testDataTemp)]<-0
+testDataTemp[is.na(testDataTemp)]<-1
+trainingData<-testDataTemp*data
+trainingData[trainingData==0]<-NA
+kable(trainingData)
+```
+
+#Raw average model
+
+The raw average model simple predict all item/user combinations to be equal to the overall mean of the training data. To do this we calculate the mean of our training set.
+
+```{r}
+rawAverage<-mean(trainingData,na.rm = TRUE)
+averageData<-data
+averageData<-apply(averageData,1:2,function(x) rawAverage)
+kable(averageData)
+```
+
+##Training RMSE
+
+Error is calculated using the training matrix.
+
+```{r}
+trainingRMSEData<-trainingData
+trainingRMSEData<-apply(trainingRMSEData,1:2,function(x) (x-rawAverage)^2)
+trainingRMSE<-(mean(trainingRMSEData,na.rm = TRUE))^0.5
+trainingRMSE
+```
+
+
+
+##Test RMSE
+
+Error is calculated using the test matrix.
+
+```{r}
+testRMSEData<-testData
+testRMSEData<-apply(testRMSEData,1:2,function(x) (x-rawAverage)^2)
+testRMSE<-(mean(testRMSEData,na.rm = TRUE))^0.5
+testRMSE
+```
+
+As expected the training RMSE is lower than the test.
+
+#Baseline Predictor
+
+Using our training data, we calculate the bias for each user and each item.
+
+```{r}
+userBias<-rowMeans(trainingData,na.rm = TRUE)-rawAverage
+kable(userBias)
+movieBias<-colMeans(trainingData,na.rm = TRUE)-rawAverage
+kable(movieBias)
+```
+
+```{r}
+baselinePredictor<-data
+for(i in 1:nrow(data)) {
+  for(j in 1:ncol(data))  {
+    baselinePredictor[i,j]<-rawAverage+userBias[i]+movieBias[j] 
+    if(baselinePredictor[i,j]>5) baselinePredictor[i,j]<-5
+    if(baselinePredictor[i,j]<0) baselinePredictor[i,j]<-0
+  }
+}
+kable(baselinePredictor)
+```
+
+##Training RMSE
+
+Error is calculated using the training matrix.
+
+```{r}
+trainingRMSEDataBaseline<-trainingData
+for(i in 1:nrow(trainingRMSEDataBaseline)) {
+  for(j in 1:ncol(trainingRMSEDataBaseline))  {
+    trainingRMSEDataBaseline[i,j]<-(trainingRMSEDataBaseline[i,j]-baselinePredictor[i,j])^2
+  }
+}
+trainingRMSEBaseline<-(mean(trainingRMSEDataBaseline,na.rm = TRUE))^0.5
+trainingRMSEBaseline
+```
+
+
+
+##Test RMSE
+
+Error is calculated using the test matrix.
+
+```{r}
+testRMSEDataBaseline<-testData
+for(i in 1:nrow(testRMSEDataBaseline)) {
+  for(j in 1:ncol(testRMSEDataBaseline))  {
+    testRMSEDataBaseline[i,j]<-(testRMSEDataBaseline[i,j]-baselinePredictor[i,j])^2
+  }
+}
+testRMSEBaseline<-(mean(testRMSEDataBaseline,na.rm = TRUE))^0.5
+testRMSEBaseline
+```
+
+#Summary
+The baseline predictor shows much better results than the simple raw average model. Although this is a small dataset, so data variance and how the random training and test datasets are defined will have a large effect in the results, we can consistently see how training RMSE for the baseline predictor is lower than the raw average. The tests RMSE for both are much closer. This should be a better measure of the higher quality of the baseline predictor. In this small dataset it is somewhat harder to see the improvement of one model to the other. Using larger datasets should provide a larger contrast.
